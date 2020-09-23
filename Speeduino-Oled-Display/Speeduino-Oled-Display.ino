@@ -29,9 +29,12 @@ int PSI;
 float TEST;
  byte cmdAdata[40] ; 
 //#define ALTSTYLE
+#define DisplayLogo
+
+
+#ifdef DisplayLogo
 #define imageWidth 128
 #define imageHeight 54
-
 const unsigned char bitmap [] PROGMEM=
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -89,6 +92,7 @@ const unsigned char bitmap [] PROGMEM=
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
+#endif
 void setup () {
   Serial.begin(115200);
   
@@ -101,10 +105,12 @@ void setup () {
     display.setCursor(0,0);
     display.setTextSize(3);             // Draw 2X-scale text
     display.setTextColor(SSD1306_WHITE);
+    #ifdef DisplayLogo
     display.drawBitmap(
     (display.width()  - imageWidth ) / 2,
     (display.height() - imageHeight) / 2,
     bitmap, imageWidth, imageHeight, 1);
+    #endif
     display.display();
     delay(250);
   CLT = 0;
