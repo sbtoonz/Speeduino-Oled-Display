@@ -188,18 +188,18 @@ void drawData() { //Setup the mock area for drawing this info on the OLED
   display.clearDisplay();
   display.setTextSize(1);             // Draw 2X-scale text
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,15);
+  display.setCursor(0,25);
   display.print("AFR-");
   display.setTextSize(2);
-  display.setCursor(23,12);
+  display.setCursor(23,23);
   display.print(TEST, 1);
-  display.setCursor(69,12);
+  display.setCursor(69,23);
   display.print("|");
-  display.setCursor(104,15);
+  display.setCursor(104,25);
   display.setTextSize(1);
   display.print("-PSI");
   display.setTextSize(2);
-  display.setCursor(80,12);
+  display.setCursor(80,23);
   display.print(PSI);
   delay(75);
   display.display();
