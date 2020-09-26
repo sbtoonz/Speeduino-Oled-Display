@@ -14,9 +14,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT,
   &SPI, OLED_DC, OLED_RESET, OLED_CS);
 
 
-#ifdef ARDUINO_BLUEPILL_F103C8
-HardwareSerial Serial(USART3); //for some reason this isn't defined in arduino_core_stm32
-#endif
 static uint32_t oldtime = millis();
 byte SpeedyResponse[100]; //The data buffer for the Serial data. This is longer than needed, just in case
 byte ByteNumber;  // pointer to which byte number we are reading currently
@@ -26,10 +23,11 @@ unsigned int RPM;   //RPM and PW from speeduino
 float AFR;
 int MAP;
 int PSI;
-float TEST;
+float AFRConv;
  byte cmdAdata[40] ; 
-//#define ALTSTYLE
-#define DisplayLogo
+
+
+#define DisplayLogo  //Comment this out to disable display of the logo on bootup
 
 
 #ifdef DisplayLogo
@@ -121,14 +119,6 @@ void setup () {
 }
 
 void loop () {
-  #ifdef ALTSTYLE
-    requestData();
-    processData();
-    drawData();
-    requestData();              //restart data reading
-  }
-  #endif
-  #ifndef ALTSTYLE
   if (Serial.available () > 0) {  // read bytes from Serial
     SpeedyResponse[ByteNumber ++] = Serial.read();
   }
@@ -136,8 +126,8 @@ void loop () {
     oldtime = millis();          // All ok. zero out timeout calculation
     ByteNumber = 0;              // zero out the byte number pointer
     processData();               // do the necessary processing for received data
-   // displayData();
-    drawData();// only required for debugging
+   // displayData();            // only required for debugging
+    drawData();
     requestData();               //restart data reading
 
   }
@@ -146,33 +136,11 @@ void loop () {
     ByteNumber = 0;             // zero out the byte number pointer
     requestData();              //restart data reading
   }
-  #endif
 }
 
 
-
-
 void requestData() {
-#ifdef ALTSTYLE
-      Serial.write("A");
-        delay(100);
-        while (!Serial.available()) { }
-        cmdAdata[1] = Serial.read();    // read respnse from speeduino
-        if (cmdAdata[1] == 65) //dec 65 == "A"
-         {
-          if (Serial.available () > 0) {
-          SpeedyResponse[ByteNumber ++] = Serial.read();
-          }
-          if (ByteNumber > (74)) {         // After 75 bytes all the data from speeduino has been received so time to process it (A + 74 databytes)
-              oldtime = millis();          // All ok. zero out timeout calculation
-              ByteNumber = 0;              // zero out the byte number pointer
-          }
-         }
-#endif
-#ifndef ALTSTYLE
-Serial.write("A");
-#endif   
-  
+Serial.write("A");  
 }
 
 //display the needed values in serial monitor for debugging
@@ -180,7 +148,7 @@ void displayData() {
   Serial.print ("RPM-"); Serial.print (RPM); Serial.print("\t");
   Serial.print ("CLT-"); Serial.print (CLT); Serial.print("\t");
   Serial.print ("MAP-"); Serial.print (MAP); Serial.print("\t");
-  Serial.print ("AFR-"); Serial.print (TEST); Serial.println("\t");
+  Serial.print ("AFR-"); Serial.print (AFRConv); Serial.println("\t");
 
 }
 
@@ -192,7 +160,7 @@ void drawData() { //Setup the mock area for drawing this info on the OLED
   display.print("AFR-");
   display.setTextSize(2);
   display.setCursor(23,23);
-  display.print(TEST, 1);
+  display.print(AFRConv, 1);
   display.setCursor(69,23);
   display.print("|");
   display.setCursor(104,25);
@@ -201,10 +169,10 @@ void drawData() { //Setup the mock area for drawing this info on the OLED
   display.setTextSize(2);
   display.setCursor(80,23);
   display.print(PSI);
-  delay(75);
+  delay(75);  // this delay was placed in order for the screen to not populate at a speed that is inhumanly readable
   display.display();
 }
-void processData() {  // necessary conversion for the data before sending to CAN BUS
+void processData() {  // necessary conversion for the data before sending to screen
 
   RPM            = ((SpeedyResponse [16] << 8) | (SpeedyResponse [15])); // RPM low & high (Int) TBD: probaply no need to split high and low bytes etc. this could be all simpler
   AFR           = SpeedyResponse[11];
@@ -212,6 +180,6 @@ void processData() {  // necessary conversion for the data before sending to CAN
   PSI           = (MAP / 6.895);
   RPM = RPM;
   CLT = SpeedyResponse[8];
-  TEST = AFR/10;
+  AFRConv = AFR/10;
   
 }
