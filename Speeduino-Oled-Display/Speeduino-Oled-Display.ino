@@ -1,39 +1,41 @@
-#include <avr/pgmspace.h>
+//#include <avr/pgmspace.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
+#include <Fonts/FreeSansBold18pt7b.h>
+ 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
-
+ 
 #define OLED_DC     9
-#define OLED_CS     10
+#define OLED_CS    10
 #define OLED_RESET  8
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT,
   &SPI, OLED_DC, OLED_RESET, OLED_CS);
-
-
+ 
+ 
 static uint32_t oldtime = millis();
-byte SpeedyResponse[100]; //The data buffer for the Serial data. This is longer than needed, just in case
-byte ByteNumber;  // pointer to which byte number we are reading currently
-byte readCLT; // CLT doesn't need to be updated very ofter so
-int CLT;   // to store coolant temp
-unsigned int RPM;   //RPM and PW from speeduino
-float AFR;
-int MAP;
-int PSI;
-float AFRConv;
- byte cmdAdata[40] ; 
-
-
-#define DisplayLogo  //Comment this out to disable display of the logo on bootup
-
-
+uint8_t speedyResponse[100]; //The data buffer for the Serial data. This is longer than needed, just in case
+uint8_t byteNumber[2];  // pointer to which uint8_t number we are reading currently
+uint8_t readclt; // clt doesn't need to be updated very ofter so
+int clt;   // to store coolant temp
+unsigned int rpm;  //rpm and PW from speeduino
+float afr;
+float mapData;
+int8_t psi;
+float afrConv;
+uint8_t cmdAdata[40] ; 
+uint8_t test;
+ 
+ 
+#define DisplayLogo //Comment this out to disable display of the logo on bootup
+ 
+//The following defined area was a bmp to hex conversion I did of my logo 
 #ifdef DisplayLogo
 #define imageWidth 128
 #define imageHeight 54
-const unsigned char bitmap [] PROGMEM=
+const unsigned char bitmapData [] PROGMEM=
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -91,95 +93,118 @@ const unsigned char bitmap [] PROGMEM=
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 #endif
+
+#define RX2_PIN 16
+#define TX2_PIN 17
+
 void setup () {
   Serial.begin(115200);
-  
+  Serial.setTimeout(200);
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC)) {
-    Serial.println(F("SSD1306 allocation failed"));
     for(;;); // Don't proceed, loop forever
   }
     display.clearDisplay();
     display.setCursor(0,0);
-    display.setTextSize(3);             // Draw 2X-scale text
+    display.setTextSize(3);            // Draw 2X-scale text
     display.setTextColor(SSD1306_WHITE);
     #ifdef DisplayLogo
     display.drawBitmap(
     (display.width()  - imageWidth ) / 2,
     (display.height() - imageHeight) / 2,
-    bitmap, imageWidth, imageHeight, 1);
+    bitmapData, imageWidth, imageHeight, 1);
     #endif
     display.display();
     delay(250);
-  CLT = 0;
-  readCLT = 20;
-  delay(250);
-  requestData();
-
+  clt = 0;
+  readclt = 20;
+  delay(500);
 }
 
-void loop () {
-  if (Serial.available () > 0) {  // read bytes from Serial
-    SpeedyResponse[ByteNumber ++] = Serial.read();
-  }
-  if (ByteNumber > (75)) {         // After 75 bytes all the data from speeduino has been received so time to process it (A + 74 databytes)
-    oldtime = millis();          // All ok. zero out timeout calculation
-    ByteNumber = 0;              // zero out the byte number pointer
-    processData();               // do the necessary processing for received data
-   // displayData();            // only required for debugging
-    drawData();
-    requestData();               //restart data reading
 
-  }
-  if ( (millis() - oldtime) > 500) { // timeout if for some reason reading Serial fails
-    oldtime = millis();
-    ByteNumber = 0;             // zero out the byte number pointer
-    requestData();              //restart data reading
+#define BYTES_TO_READ 74
+#define SERIAL_TIMEOUT 300
+float rps;
+boolean sent = false;
+boolean received = false;
+uint32_t sendTimestamp;
+
+void loop () {
+  requestData();
+  if(received) {
+    //displayData();
+    drawData();
+    received = false;
   }
 }
 
 
 void requestData() {
-Serial.write("A");  
+  if(sent && Serial.available()) {
+    if(Serial.read() == 'A') {
+      uint8_t bytesRead = Serial.readBytes(speedyResponse, BYTES_TO_READ);
+      if(bytesRead != BYTES_TO_READ) {
+        processData();
+        for(uint8_t i = 0; i < bytesRead; i++) {
+        }
+        received = true;
+        clearRX();
+      } else {
+        processData();
+        received = true;
+        rps = 1000.0/(millis() - sendTimestamp);
+      }
+      sent = false;
+    } else Serial.read();
+  } else if(!sent) {
+    Serial.write('A');
+    sent = true;
+    sendTimestamp = millis();
+  } else if(sent && millis() - sendTimestamp > SERIAL_TIMEOUT) {
+    sent = false;
+  }
 }
 
+void clearRX() {
+  while(Serial.available()) Serial.read();
+}
+ 
 //display the needed values in serial monitor for debugging
 void displayData() {
-  Serial.print ("RPM-"); Serial.print (RPM); Serial.print("\t");
-  Serial.print ("CLT-"); Serial.print (CLT); Serial.print("\t");
-  Serial.print ("MAP-"); Serial.print (MAP); Serial.print("\t");
-  Serial.print ("AFR-"); Serial.print (AFRConv); Serial.println("\t");
-
+  Serial.print("RPM-"); Serial.print(rpm); Serial.print("\t");
+  Serial.print("CLT-"); Serial.print(clt); Serial.print("\t");
+  Serial.print("MAP-"); Serial.print(psi); Serial.print("\t");
+  Serial.print("AFR-"); Serial.print(afrConv); Serial.println("\t");
+  
 }
-
+ 
 void drawData() { //Setup the mock area for drawing this info on the OLED
   display.clearDisplay();
-  display.setTextSize(1);             // Draw 2X-scale text
+  display.setTextSize(1);            // Draw 2X-scale text
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,25);
-  display.print("AFR-");
+  display.print("afr-");
   display.setTextSize(2);
   display.setCursor(23,23);
-  display.print(AFRConv, 1);
+  display.print(afrConv, 1);
   display.setCursor(69,23);
   display.print("|");
   display.setCursor(104,25);
   display.setTextSize(1);
-  display.print("-PSI");
+  display.print("-psi");
   display.setTextSize(2);
   display.setCursor(80,23);
-  display.print(PSI);
+  display.print(psi);
   delay(75);  // this delay was placed in order for the screen to not populate at a speed that is inhumanly readable
   display.display();
 }
 void processData() {  // necessary conversion for the data before sending to screen
-
-  RPM            = ((SpeedyResponse [16] << 8) | (SpeedyResponse [15])); // RPM low & high (Int) TBD: probaply no need to split high and low bytes etc. this could be all simpler
-  AFR           = SpeedyResponse[11];
-  MAP           = ((SpeedyResponse [6] << 8) | (SpeedyResponse [5]));
-  PSI           = (MAP / 6.895);
-  RPM = RPM;
-  CLT = SpeedyResponse[8];
-  AFRConv = AFR/10;
+ 
+  rpm = ((speedyResponse [15] << 8) | (speedyResponse [14])); // rpm low & high (Int) TBD: probaply no need to split high and low bytes etc. this could be all simpler
+  afr = speedyResponse[10];
+  mapData = ((speedyResponse [5] << 8) | (speedyResponse [4]));
+  psi = (mapData / 6.895);
+  clt = speedyResponse[7];
+  afrConv = afr/10;
   
 }
